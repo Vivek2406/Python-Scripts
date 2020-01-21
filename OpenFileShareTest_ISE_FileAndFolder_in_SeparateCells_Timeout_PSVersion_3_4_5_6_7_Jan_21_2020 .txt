@@ -1,0 +1,1244 @@
+﻿if ($psversiontable.PSVersion)
+
+{
+if ($psversiontable.PSVersion.Major -gt 1)
+
+        {
+
+switch ($psversiontable.PSVersion.Major)
+
+            {
+
+2       { try{
+
+
+
+function Export-CSV {
+[CmdletBinding(DefaultParameterSetName='Delimiter',
+  SupportsShouldProcess=$true, ConfirmImpact='Medium')]
+param(
+ [Parameter(Mandatory=$true, ValueFromPipeline=$true,
+           ValueFromPipelineByPropertyName=$true)]
+ [System.Management.Automation.PSObject]
+ ${InputObject},
+
+ [Parameter(Mandatory=$true, Position=0)]
+ [Alias('PSPath')]
+ [System.String]
+ ${Path},
+
+ #region -Append (added by Dmitry Sotnikov)
+ [Switch]
+ ${Append},
+ #endregion 
+
+ [Switch]
+ ${Force},
+
+ [Switch]
+ ${NoClobber},
+
+ [ValidateSet('Unicode','UTF7','UTF8','ASCII','UTF32',
+                  'BigEndianUnicode','Default','OEM')]
+ [System.String]
+ ${Encoding},
+
+ [Parameter(ParameterSetName='Delimiter', Position=1)]
+ [ValidateNotNull()]
+ [System.Char]
+ ${Delimiter},
+
+ [Parameter(ParameterSetName='UseCulture')]
+ [Switch]
+ ${UseCulture},
+
+ [Alias('NTI')]
+ [Switch]
+ ${NoTypeInformation})
+
+begin
+{
+ # This variable will tell us whether we actually need to append
+ # to existing file
+ $AppendMode = $false
+
+ try {
+  $outBuffer = $null
+  if ($PSBoundParameters.TryGetValue('OutBuffer', [ref]$outBuffer))
+  {
+      $PSBoundParameters['OutBuffer'] = 1
+  }
+  $wrappedCmd = $ExecutionContext.InvokeCommand.GetCommand('Export-Csv',
+    [System.Management.Automation.CommandTypes]::Cmdlet)
+
+
+ #String variable to become the target command line
+ $scriptCmdPipeline = ''
+
+ # Add new parameter handling
+ #region Dmitry: Process and remove the Append parameter if it is present
+ if ($Append) {
+
+  $PSBoundParameters.Remove('Append') | Out-Null
+
+  if ($Path) {
+   if (Test-Path $Path) {        
+    # Need to construct new command line
+    $AppendMode = $true
+
+    if ($Encoding.Length -eq 0) {
+     # ASCII is default encoding for Export-CSV
+     $Encoding = 'ASCII'
+    }
+
+    # For Append we use ConvertTo-CSV instead of Export
+    $scriptCmdPipeline += 'ConvertTo-Csv -NoTypeInformation '
+
+    # Inherit other CSV convertion parameters
+    if ( $UseCulture ) {
+     $scriptCmdPipeline += ' -UseCulture '
+    }
+    if ( $Delimiter ) {
+     $scriptCmdPipeline += " -Delimiter '$Delimiter' "
+    } 
+
+    # Skip the first line (the one with the property names) 
+    $scriptCmdPipeline += ' | Foreach-Object {$start=$true}'
+    $scriptCmdPipeline += '{if ($start) {$start=$false} else {$_}} '
+
+    # Add file output
+    $scriptCmdPipeline += " | Out-File -FilePath '$Path'"
+    $scriptCmdPipeline += " -Encoding '$Encoding' -Append "
+
+    if ($Force) {
+     $scriptCmdPipeline += ' -Force'
+    }
+
+    if ($NoClobber) {
+     $scriptCmdPipeline += ' -NoClobber'
+    }   
+   }
+  }
+ } 
+
+
+
+ $scriptCmd = {& $wrappedCmd @PSBoundParameters }
+
+ if ( $AppendMode ) {
+  # redefine command line
+  $scriptCmd = $ExecutionContext.InvokeCommand.NewScriptBlock(
+      $scriptCmdPipeline
+    )
+ } else {
+  # execute Export-CSV as we got it because
+  # either -Append is missing or file does not exist
+  $scriptCmd = $ExecutionContext.InvokeCommand.NewScriptBlock(
+      [string]$scriptCmd
+    )
+ }
+
+ # standard pipeline initialization
+ $steppablePipeline = $scriptCmd.GetSteppablePipeline(
+        $myInvocation.CommandOrigin)
+ $steppablePipeline.Begin($PSCmdlet)
+
+ } catch {
+   throw
+ }
+
+}
+
+process
+{
+  try {
+      $steppablePipeline.Process($_)
+  } catch {
+      throw
+  }
+}
+
+end
+{
+  try {
+      $steppablePipeline.End()
+  } catch {
+      throw
+  }
+}
+
+}
+
+
+$logAndCSVpath= Read-Host "`nPlease read below instruction CAREFULLY!..`n`nEnter the path where you want to save log file and CSV file. Please be ensured that path is ending with a back slash(\) (e.g. C:\Users\username\Desktop\NewFolder\)`n"
+Write-Host "`nPlease do NOT open log file / CSV file while script is being executed."
+Read-Host "`nPress Enter key to continue"
+Write-Host "`nSrcipt is being executed, please wait until it shows the finish message...`r`n"
+
+$stopwatch =  [system.diagnostics.stopwatch]::StartNew()
+$SharedFolderCommand = Get-WmiObject Win32_Share| Where-Object {$_.Description –notlike '*default*' -and $_.Description –notlike '*Remote*' -and $_.Description –notlike '*hello*'};$Folder=@();$FPermission=@();$ChReqDirectories=@();$ChReqFiles=@();$ComputerName=$env:computername; $TimeStamp=(Get-Date -Format MM-dd-yyyy)+"_"+(Get-Date -Format HH-mm-ss)
+$SharedFolderCommandPath=$SharedFolderCommand|Select -exp Path
+$SharedFolderCommandName=$SharedFolderCommand|Select -exp Name
+for($i=0; $i -lt $SharedFolderCommand.length; $i++)
+                        {
+
+$ChReqAll=Get-ChildItem -Path $SharedFolderCommandPath[$i] -Recurse -ErrorAction SilentlyContinue -Force
+$ChReqAllName= $ChReqAll |Select -exp Name
+$ChReqAllMode=$ChReqAll |Select -exp Mode
+$ChReqAllFullName= $ChReqAll |Select -exp FullName
+#$ChReqFiles=Get-ChildItem -Path $SharedFolderCommand.path[$i] -Recurse -ErrorAction SilentlyContinue -File -Depth 3 -Force
+
+$Folder=$SharedFolderCommandName[$i]
+$PSFolderPath=$SharedFolderCommandPath[$i]
+
+$results = new-object psobject -property @{
+
+HostName=$ComputerName; 
+Parent_Folder=$Folder;
+Parent_Folder_Path=(($PSFolderPath)|Out-String).Trim();
+#ScopeName=(($FPermission | Select ScopeName).ScopeName|Out-String).Trim();
+##AccountName=(($FPermission| Select AccountName).AccountName|Out-String).Trim();
+##AccessControlType=(($FPermission|Select AccessControlType).AccessControlType|Out-String).Trim();
+##AccessRight=(($FPermission|Select AccessRight).AccessRight|Out-String).Trim()
+                                            } |
+Select HostName,
+Parent_Folder,
+#ScopeName,
+AccountName,
+AccessControlType,
+AccessRight,
+Parent_Folder_Path,
+Child_Folder_and_File,
+Mode_of_Child_Folder_and_File,
+Child_Folder_and_File_FullPath | Export-CSV ($logAndCSVpath+"OpenFileShare_"+($computerName)+"_"+($TimeStamp)+".csv") -NoTypeInformation -Append -Force -NoClobber
+
+
+for ($j=0; $j -lt $ChReqAll.length; $j++)
+                                                {
+if ($ChReqAll.length -eq 1)
+    {
+$results2 = new-object psobject -property @{
+Child_Folder_and_File=(($ChReqAll|Select -exp Name)|Out-String).Trim();
+Mode_of_Child_Folder_and_File=(($ChReqAll|Select -exp Mode)|Out-String).Trim();
+Child_Folder_and_File_FullPath=(($ChReqAll|Select -exp FullName)|Out-String).Trim()}|
+Select HostName,
+Parent_Folder,
+#ScopeName,
+AccountName,
+AccessControlType,
+AccessRight,
+Parent_Folder_Path,
+Child_Folder_and_File,
+Mode_of_Child_Folder_and_File,
+Child_Folder_and_File_FullPath| 
+
+Export-CSV ($logAndCSVpath+"OpenFileShare_"+($computerName)+"_"+($TimeStamp)+".csv") -NoTypeInformation -Append -Force -NoClobber
+
+if ($totalSecs%30 -eq 0)
+{Write-Host "Total time elapsed $totalSecs second(s) so far. Script execution is still in progress... "}
+
+$totalSecs =  [math]::Round($stopwatch.Elapsed.TotalSeconds,0)
+
+if ($totalSecs -ge 1800)
+  {
+  Write-Host "`r`nTimeout after $totalSecs sec...`r`n `r`nLog was created at:"(Get-Date)"`r`nScript got executed successfully without any error for powershell version 2.`r`n------------------END------------------------" 
+  Write-Output "`r`nTimeout after $totalSecs sec...`r`n`r`nLog was created at:"(Get-Date)"`r`nScript got executed successfully without any error for powershell version 2.`r`n------------------END------------------------" | out-file -FilePath $logAndCSVpath"OpenFileShare.log" -append
+  exit
+  }
+    }
+
+else 
+    {
+
+$results3 = new-object psobject -property @{
+Child_Folder_and_File=($ChReqAllName[$j]);
+Mode_of_Child_Folder_and_File=($ChReqAllMode[$j]);
+Child_Folder_and_File_FullPath=($ChReqAllFullName[$j])} |
+Select HostName,
+Parent_Folder,
+#ScopeName,
+AccountName,
+AccessControlType,
+AccessRight,
+Parent_Folder_Path,
+Child_Folder_and_File,
+Mode_of_Child_Folder_and_File,
+Child_Folder_and_File_FullPath|
+Export-CSV ($logAndCSVpath+"OpenFileShare_"+($computerName)+"_"+($TimeStamp)+".csv") -NoTypeInformation -Append -Force -NoClobber
+$totalSecs =  [math]::Round($stopwatch.Elapsed.TotalSeconds,0)
+
+if ($totalSecs%30 -eq 0)
+{Write-Host "Total time elapsed $totalSecs second(s) so far. Script execution is still in progress... "}
+
+if ($totalSecs -ge 1800)
+  {
+  Write-Host "`r`nTimeout after $totalSecs sec...`r`n `r`nLog was created at:"(Get-Date)"`r`nScript got executed successfully without any error for powershell version 2.`r`n------------------END------------------------" 
+  Write-Output "`r`nTimeout after $totalSecs sec...`r`n`r`nLog was created at:"(Get-Date)"`r`nScript got executed successfully without any error for powershell version 2.`r`n------------------END------------------------" | out-file -FilePath $logAndCSVpath"OpenFileShare.log" -append
+  exit
+  }
+
+    }
+                                                }
+  
+
+                            }
+                  }
+catch
+{
+$ExceptionFullName=$_.Exception.GetType().FullName
+$SErrorMessage = $_.Exception.Message
+$Error_At_Line_Number =$_.InvocationInfo.ScriptLineNumber
+Write-Output "Log was created at:"(Get-Date)"`r`nCSV File was NOT created because an error occured during the excution of the script for for powershell version 2:-`r`n`r`nErrorFullName: $ExceptionFullName`r`nErrorMessage: $SErrorMessage `r`n $Error_At_Line_Number`r`n`r`nScript attempted to run at:"(Get-Date)"------------------END-----------------------" | out-file -FilePath $logAndCSVpath"OpenFileShare.log" -append
+Write-Host $ExceptionFullName
+Write-Host $SErrorMessage
+Write-Host $_.InvocationInfo.ScriptLineNumber
+break
+}
+
+Write-Output "Log was created at:"(Get-Date)"`r`nScript got executed successfully without any error for powershell version  2.`r`n------------------END------------------------" | out-file -FilePath $logAndCSVpath"OpenFileShare.log" -append
+Write-Host "`nScript execution is finished for powershell version 2. Please go to C:\Users\vivek\Desktop\result directory to get the log file / CSV file"
+Read-Host "`nPress Enter key to exit"
+               }
+
+3 { try{
+
+$logAndCSVpath= Read-Host "`nPlease read below instruction CAREFULLY!..`n`nEnter the path where you want to save log file and CSV file. Please be ensured that path is ending with a back slash(\) (e.g. C:\Users\username\Desktop\NewFolder\)`n"
+Write-Host "`nPlease do NOT open log file / CSV file while script is being executed."
+Read-Host "`nPress Enter key to continue"
+Write-Host "`nSrcipt is being executed, please wait until it shows the finish message...`r`n"
+
+$stopwatch =  [system.diagnostics.stopwatch]::StartNew()
+$SharedFolderCommand = Get-SmbShare| Where-Object {$_.Description –notlike '*default*' -and $_.Description –notlike '*Remote*' -and $_.Description –notlike '*hello*'};$Folder=@();$FPermission=@();$ChReqDirectories=@();$ChReqFiles=@();$ComputerName=$env:computername; $TimeStamp=(Get-Date -Format MM-dd-yyyy)+"_"+(Get-Date -Format HH-mm-ss)
+
+for($i=0; $i -lt $SharedFolderCommand.length; $i++)
+
+                        {
+
+$ChReqAll=Get-ChildItem -Path $SharedFolderCommand.path[$i] -Recurse -ErrorAction SilentlyContinue -Force
+
+#$ChReqFiles=Get-ChildItem -Path $SharedFolderCommand.path[$i] -Recurse -ErrorAction SilentlyContinue -File -Depth 3 -Force
+
+$Folder=$SharedFolderCommand.name[$i]
+
+$FPermission=Get-SmbShareAccess -Name $SharedFolderCommand.name[$i]
+
+$PSFolderPath=$SharedFolderCommand.path[$i]
+
+$results = new-object psobject -property @{
+
+HostName=$ComputerName; 
+Parent_Folder=(($FPermission|Select Name).name|Out-String).Trim();
+Parent_Folder_Path=(($PSFolderPath)|Out-String).Trim();
+#ScopeName=(($FPermission | Select ScopeName).ScopeName|Out-String).Trim();
+AccountName=(($FPermission| Select AccountName).AccountName|Out-String).Trim();
+AccessControlType=(($FPermission|Select AccessControlType).AccessControlType|Out-String).Trim();
+AccessRight=(($FPermission|Select AccessRight).AccessRight|Out-String).Trim()
+                                            } |
+select HostName,
+Parent_Folder,
+#ScopeName,
+AccountName,
+AccessControlType,
+AccessRight,
+Parent_Folder_Path,
+Child_Folder_and_File,
+Mode_of_Child_Folder_and_File,
+Child_Folder_and_File_FullPath | Export-CSV ($logAndCSVpath+"OpenFileShare_"+($computerName)+"_"+($TimeStamp)+".csv") -NoTypeInformation -Append -Force  
+
+for ($j=0; $j -lt $ChReqAll.length; $j++)
+                                                {
+if ($ChReqAll.length -eq 1)
+    {
+$results2 = new-object psobject -property @{
+Child_Folder_and_File=(($ChReqAll|Select Name).Name|Out-String).Trim();
+Mode_of_Child_Folder_and_File=(($ChReqAll|Select Mode).Mode|Out-String).Trim();
+Child_Folder_and_File_FullPath=(($ChReqAll|Select FullName).FullName|Out-String).Trim()}|
+select HostName,
+Parent_Folder,
+#ScopeName,
+AccountName,
+AccessControlType,
+AccessRight,
+Parent_Folder_Path,
+Child_Folder_and_File,
+Mode_of_Child_Folder_and_File,
+Child_Folder_and_File_FullPath|
+Export-CSV ($logAndCSVpath+"OpenFileShare_"+($computerName)+"_"+($TimeStamp)+".csv") -NoTypeInformation -Append -Force
+
+if ($totalSecs%30 -eq 0)
+{Write-Host "Total time elapsed $totalSecs second(s) so far. Script execution is still in progress... "}
+
+$totalSecs =  [math]::Round($stopwatch.Elapsed.TotalSeconds,0)
+if ($totalSecs -ge 1800)
+  {
+  Write-Host "`r`nTimeout after $totalSecs sec...`r`n `r`nLog was created at:"(Get-Date)"`r`nScript got executed successfully without any error for powershell version 3.`r`n------------------END------------------------" 
+  Write-Output "`r`nTimeout after $totalSecs sec...`r`n`r`nLog was created at:"(Get-Date)"`r`nScript got executed successfully without any error for powershell version 3.`r`n------------------END------------------------" | out-file -FilePath $logAndCSVpath"OpenFileShare.log" -append
+  exit
+  }
+    }
+
+else 
+    {
+
+$results3 = new-object psobject -property @{
+Child_Folder_and_File=($ChReqAll.Name[$j]);
+Mode_of_Child_Folder_and_File=($ChReqAll.Mode[$j]);
+Child_Folder_and_File_FullPath=($ChReqAll.FullName[$j])} |
+select HostName,
+Parent_Folder,
+#ScopeName,
+AccountName,
+AccessControlType,
+AccessRight,
+Parent_Folder_Path,
+Child_Folder_and_File,
+Mode_of_Child_Folder_and_File,
+Child_Folder_and_File_FullPath|
+Export-CSV ($logAndCSVpath+"OpenFileShare_"+($computerName)+"_"+($TimeStamp)+".csv") -NoTypeInformation -Append -Force
+$totalSecs =  [math]::Round($stopwatch.Elapsed.TotalSeconds,0)
+if ($totalSecs%30 -eq 0)
+{Write-Host "Total time elapsed $totalSecs second(s) so far. Script execution is still in progress... "}
+if ($totalSecs -ge 1800)
+  {
+  Write-Host "`r`nTimeout after $totalSecs sec...`r`n `r`nLog was created at:"(Get-Date)"`r`nScript got executed successfully without any error for powershell version 3.`r`n------------------END------------------------" 
+  Write-Output "`r`nTimeout after $totalSecs sec...`r`n`r`nLog was created at:"(Get-Date)"`r`nScript got executed successfully without any error for powershell version 3.`r`n------------------END------------------------" | out-file -FilePath $logAndCSVpath"OpenFileShare.log" -append
+  exit
+  }
+
+    }
+                                                }
+  
+
+                            }
+                  }
+catch
+{
+$ExceptionFullName=$_.Exception.GetType().FullName
+$SErrorMessage = $_.Exception.Message
+Write-Output "Log was created at:"(Get-Date)"`r`nCSV File was NOT created because an error occured during the excution of the script for powershell version 3:-`r`n`r`nErrorFullName: $ExceptionFullName`r`nErrorMessage: $SErrorMessage`r`n`r`nScript attempted to run at:"(Get-Date)"------------------END-----------------------" | out-file -FilePath $logAndCSVpath"OpenFileShare.log" -append
+break
+}
+
+Write-Output "Log was created at:"(Get-Date)"`r`nScript got executed successfully without any error for powershell version 3.`r`n------------------END------------------------" | out-file -FilePath $logAndCSVpath"OpenFileShare.log" -append
+Write-Host "`nScript execution is finished for powershell version 3. Please go to "$logAndCSVpath" directory to get the log file / CSV file"
+Read-Host "`nPress Enter key to exit"
+               }
+
+
+4{ try{
+
+$logAndCSVpath= Read-Host "`nPlease read below instruction CAREFULLY!..`n`nEnter the path where you want to save log file and CSV file. Please be ensured that path is ending with a back slash(\) (e.g. C:\Users\username\Desktop\NewFolder\)`n"
+Write-Host "`nPlease do NOT open log file / CSV file while script is being executed."
+Read-Host "`nPress Enter key to continue"
+Write-Host "`nSrcipt is being executed, please wait until it shows the finish message...`r`n"
+
+$stopwatch =  [system.diagnostics.stopwatch]::StartNew()
+$SharedFolderCommand = Get-SmbShare| Where-Object {$_.Description –notlike '*default*' -and $_.Description –notlike '*Remote*' -and $_.Description –notlike '*hello*'};$Folder=@();$FPermission=@();$ChReqDirectories=@();$ChReqFiles=@();$ComputerName=$env:computername; $TimeStamp=(Get-Date -Format MM-dd-yyyy)+"_"+(Get-Date -Format HH-mm-ss)
+
+for($i=0; $i -lt $SharedFolderCommand.length; $i++)
+
+                        {
+
+$ChReqAll=Get-ChildItem -Path $SharedFolderCommand.path[$i] -Recurse -ErrorAction SilentlyContinue -Force
+
+#$ChReqFiles=Get-ChildItem -Path $SharedFolderCommand.path[$i] -Recurse -ErrorAction SilentlyContinue -File -Depth 3 -Force
+
+$Folder=$SharedFolderCommand.name[$i]
+
+$FPermission=Get-SmbShareAccess -Name $SharedFolderCommand.name[$i]
+
+$PSFolderPath=$SharedFolderCommand.path[$i]
+
+$results = new-object psobject -property @{
+
+HostName=$ComputerName; 
+Parent_Folder=(($FPermission|Select Name).name|Out-String).Trim();
+Parent_Folder_Path=(($PSFolderPath)|Out-String).Trim();
+#ScopeName=(($FPermission | Select ScopeName).ScopeName|Out-String).Trim();
+AccountName=(($FPermission| Select AccountName).AccountName|Out-String).Trim();
+AccessControlType=(($FPermission|Select AccessControlType).AccessControlType|Out-String).Trim();
+AccessRight=(($FPermission|Select AccessRight).AccessRight|Out-String).Trim()
+                                            } |
+select HostName,
+Parent_Folder,
+#ScopeName,
+AccountName,
+AccessControlType,
+AccessRight,
+Parent_Folder_Path,
+Child_Folder_and_File,
+Mode_of_Child_Folder_and_File,
+Child_Folder_and_File_FullPath | Export-CSV ($logAndCSVpath+"OpenFileShare_"+($computerName)+"_"+($TimeStamp)+".csv") -NoTypeInformation -Append -Force  
+
+for ($j=0; $j -lt $ChReqAll.length; $j++)
+                                                {
+if ($ChReqAll.length -eq 1)
+    {
+$results2 = new-object psobject -property @{
+Child_Folder_and_File=(($ChReqAll|Select Name).Name|Out-String).Trim();
+Mode_of_Child_Folder_and_File=(($ChReqAll|Select Mode).Mode|Out-String).Trim();
+Child_Folder_and_File_FullPath=(($ChReqAll|Select FullName).FullName|Out-String).Trim()}|
+select HostName,
+Parent_Folder,
+#ScopeName,
+AccountName,
+AccessControlType,
+AccessRight,
+Parent_Folder_Path,
+Child_Folder_and_File,
+Mode_of_Child_Folder_and_File,
+Child_Folder_and_File_FullPath|
+Export-CSV ($logAndCSVpath+"OpenFileShare_"+($computerName)+"_"+($TimeStamp)+".csv") -NoTypeInformation -Append -Force
+
+if ($totalSecs%30 -eq 0)
+{Write-Host "Total time elapsed $totalSecs second(s) so far. Script execution is still in progress... "}
+
+$totalSecs =  [math]::Round($stopwatch.Elapsed.TotalSeconds,0)
+if ($totalSecs -ge 1800)
+  {
+  Write-Host "`r`nTimeout after $totalSecs sec...`r`n `r`nLog was created at:"(Get-Date)"`r`nScript got executed successfully without any error for powershell version 4.`r`n------------------END------------------------" 
+  Write-Output "`r`nTimeout after $totalSecs sec...`r`n`r`nLog was created at:"(Get-Date)"`r`nScript got executed successfully without any error for powershell version 4.`r`n------------------END------------------------" | out-file -FilePath $logAndCSVpath"OpenFileShare.log" -append
+  exit
+  }
+    }
+
+else 
+    {
+
+$results3 = new-object psobject -property @{
+Child_Folder_and_File=($ChReqAll.Name[$j]);
+Mode_of_Child_Folder_and_File=($ChReqAll.Mode[$j]);
+Child_Folder_and_File_FullPath=($ChReqAll.FullName[$j])} |
+select HostName,
+Parent_Folder,
+#ScopeName,
+AccountName,
+AccessControlType,
+AccessRight,
+Parent_Folder_Path,
+Child_Folder_and_File,
+Mode_of_Child_Folder_and_File,
+Child_Folder_and_File_FullPath|
+Export-CSV ($logAndCSVpath+"OpenFileShare_"+($computerName)+"_"+($TimeStamp)+".csv") -NoTypeInformation -Append -Force
+$totalSecs =  [math]::Round($stopwatch.Elapsed.TotalSeconds,0)
+if ($totalSecs%30 -eq 0)
+{Write-Host "Total time elapsed $totalSecs second(s) so far. Script execution is still in progress... "}
+if ($totalSecs -ge 1800)
+  {
+  Write-Host "`r`nTimeout after $totalSecs sec...`r`n `r`nLog was created at:"(Get-Date)"`r`nScript got executed successfully without any error for powershell version 4.`r`n------------------END------------------------" 
+  Write-Output "`r`nTimeout after $totalSecs sec...`r`n`r`nLog was created at:"(Get-Date)"`r`nScript got executed successfully without any error for powershell version 4.`r`n------------------END------------------------" | out-file -FilePath $logAndCSVpath"OpenFileShare.log" -append
+  exit
+  }
+
+    }
+                                                }
+  
+
+                            }
+                  }
+catch
+{
+$ExceptionFullName=$_.Exception.GetType().FullName
+$SErrorMessage = $_.Exception.Message
+Write-Output "Log was created at:"(Get-Date)"`r`nCSV File was NOT created because an error occured during the excution of the script for powershell version 4:-`r`n`r`nErrorFullName: $ExceptionFullName`r`nErrorMessage: $SErrorMessage`r`n`r`nScript attempted to run at:"(Get-Date)"------------------END-----------------------" | out-file -FilePath $logAndCSVpath"OpenFileShare.log" -append
+break
+}
+
+Write-Output "Log was created at:"(Get-Date)"`r`nScript got executed successfully without any error for powershell version 4.`r`n------------------END------------------------" | out-file -FilePath $logAndCSVpath"OpenFileShare.log" -append
+Write-Host "`nScript execution is finished for powershell version 4. Please go to "$logAndCSVpath" directory to get the log file / CSV file"
+Read-Host "`nPress Enter key to exit"
+               }
+
+
+5 { try{
+
+$logAndCSVpath= Read-Host "`nPlease read below instruction CAREFULLY!..`n`nEnter the path where you want to save log file and CSV file. Please be ensured that path is ending with a back slash(\) (e.g. C:\Users\username\Desktop\NewFolder\)`n"
+Write-Host "`nPlease do NOT open log file / CSV file while script is being executed."
+Read-Host "`nPress Enter key to continue"
+Write-Host "`nSrcipt is being executed, please wait until it shows the finish message...`r`n"
+
+$stopwatch =  [system.diagnostics.stopwatch]::StartNew()
+$SharedFolderCommand = Get-SmbShare| Where-Object {$_.Description –notlike '*default*' -and $_.Description –notlike '*Remote*' -and $_.Description –notlike '*hello*'};$Folder=@();$FPermission=@();$ChReqDirectories=@();$ChReqFiles=@();$ComputerName=$env:computername; $TimeStamp=(Get-Date -Format MM-dd-yyyy)+"_"+(Get-Date -Format HH-mm-ss)
+
+for($i=0; $i -lt $SharedFolderCommand.length; $i++)
+
+                        {
+
+$ChReqAll=Get-ChildItem -Path $SharedFolderCommand.path[$i] -Recurse -ErrorAction SilentlyContinue -Force
+
+#Write-Host $ChReqAll
+#Write-Host ($ChReqAll | Select Name).length
+
+#$ChReqFiles=Get-ChildItem -Path $SharedFolderCommand.path[$i] -Recurse -ErrorAction SilentlyContinue -File -Depth 3 -Force
+
+$Folder=$SharedFolderCommand.name[$i]
+
+$FPermission=Get-SmbShareAccess -Name $SharedFolderCommand.name[$i]
+
+$PSFolderPath=$SharedFolderCommand.path[$i]
+
+$results = new-object psobject -property @{
+
+HostName=$ComputerName; 
+Parent_Folder=(($FPermission|Select Name).name|Out-String).Trim();
+Parent_Folder_Path=(($PSFolderPath)|Out-String).Trim();
+#ScopeName=(($FPermission | Select ScopeName).ScopeName|Out-String).Trim();
+AccountName=(($FPermission| Select AccountName).AccountName|Out-String).Trim();
+AccessControlType=(($FPermission|Select AccessControlType).AccessControlType|Out-String).Trim();
+AccessRight=(($FPermission|Select AccessRight).AccessRight|Out-String).Trim()
+                                            } |
+select HostName,
+Parent_Folder,
+#ScopeName,
+AccountName,
+AccessControlType,
+AccessRight,
+Parent_Folder_Path,
+Child_Folder_and_File,
+Mode_of_Child_Folder_and_File,
+Child_Folder_and_File_FullPath | Export-CSV ($logAndCSVpath+"OpenFileShare_"+($computerName)+"_"+($TimeStamp)+".csv") -NoTypeInformation -Append -Force  
+
+for ($j=0; $j -lt $ChReqAll.length; $j++)
+                                                {
+if ($ChReqAll.length -ge 0)
+    {
+$results2 = new-object psobject -property @{
+Child_Folder_and_File=(($ChReqAll|Select Name).Name|Out-String).Trim();
+Mode_of_Child_Folder_and_File=(($ChReqAll|Select Mode).Mode|Out-String).Trim();
+Child_Folder_and_File_FullPath=(($ChReqAll|Select FullName).FullName|Out-String).Trim()}|
+select HostName,
+Parent_Folder,
+#ScopeName,
+AccountName,
+AccessControlType,
+AccessRight,
+Parent_Folder_Path,
+Child_Folder_and_File,
+Mode_of_Child_Folder_and_File,
+Child_Folder_and_File_FullPath|
+Export-CSV ($logAndCSVpath+"OpenFileShare_"+($computerName)+"_"+($TimeStamp)+".csv") -NoTypeInformation -Append -Force
+
+if ($totalSecs%30 -eq 0)
+{Write-Host "Total time elapsed $totalSecs second(s) so far. Script execution is still in progress... "}
+
+$totalSecs =  [math]::Round($stopwatch.Elapsed.TotalSeconds,0)
+if ($totalSecs -ge 1800)
+  {
+  Write-Host "`r`nTimeout after $totalSecs sec...`r`n `r`nLog was created at:"(Get-Date)"`r`nScript got executed successfully without any error for powershell version 5.`r`n------------------END------------------------" 
+  Write-Output "`r`nTimeout after $totalSecs sec...`r`n`r`nLog was created at:"(Get-Date)"`r`nScript got executed successfully without any error for powershell version 5.`r`n------------------END------------------------" | out-file -FilePath $logAndCSVpath"OpenFileShare.log" -append
+  exit
+  }
+    }
+
+else 
+    {
+
+$results3 = new-object psobject -property @{
+Child_Folder_and_File=($ChReqAll.Name[$j]);
+Mode_of_Child_Folder_and_File=($ChReqAll.Mode[$j]);
+Child_Folder_and_File_FullPath=($ChReqAll.FullName[$j])} |
+select HostName,
+Parent_Folder,
+#ScopeName,
+AccountName,
+AccessControlType,
+AccessRight,
+Parent_Folder_Path,
+Child_Folder_and_File,
+Mode_of_Child_Folder_and_File,
+Child_Folder_and_File_FullPath|
+Export-CSV ($logAndCSVpath+"OpenFileShare_"+($computerName)+"_"+($TimeStamp)+".csv") -NoTypeInformation -Append -Force
+$totalSecs =  [math]::Round($stopwatch.Elapsed.TotalSeconds,0)
+if ($totalSecs%30 -eq 0)
+{Write-Host "Total time elapsed $totalSecs second(s) so far. Script execution is still in progress... "}
+if ($totalSecs -ge 1800)
+  {
+  Write-Host "`r`nTimeout after $totalSecs sec...`r`n `r`nLog was created at:"(Get-Date)"`r`nScript got executed successfully without any error for powershell version 5.`r`n------------------END------------------------" 
+  Write-Output "`r`nTimeout after $totalSecs sec...`r`n`r`nLog was created at:"(Get-Date)"`r`nScript got executed successfully without any error for powershell version 5.`r`n------------------END------------------------" | out-file -FilePath $logAndCSVpath"OpenFileShare.log" -append
+  exit
+  }
+
+    }
+                                                
+                                                }
+  
+
+                            }
+                  }
+
+catch
+{
+$ExceptionFullName=$_.Exception.GetType().FullName
+$SErrorMessage = $_.Exception.Message
+Write-Output "Log was created at:"(Get-Date)"`r`nCSV File was NOT created because an error occured during the excution of the script for powershell version 5:-`r`n`r`nErrorFullName: $ExceptionFullName`r`nErrorMessage: $SErrorMessage`r`n`r`nScript attempted to run at:"(Get-Date)"------------------END-----------------------" | out-file -FilePath $logAndCSVpath"OpenFileShare.log" -append
+break
+}
+
+Write-Output "Log was created at:"(Get-Date)"`r`nScript got executed successfully without any error for powershell version 5.`r`n------------------END------------------------" | out-file -FilePath $logAndCSVpath"OpenFileShare.log" -append
+$SharedFolderCommand | Select -ExpandProperty name | Export-CSV ($logAndCSVpath+"OpenFileShare_"+($computerName)+"_"+($TimeStamp)+".csv") -NoTypeInformation -Append -Force
+
+Write-Host "`nScript execution is finished for powershell version 5. Please go to "$logAndCSVpath" directory to get the log file / CSV file"
+Read-Host "`nPress Enter key to exit"
+   }
+
+6{ try{
+
+$logAndCSVpath= Read-Host "`nPlease read below instruction CAREFULLY!..`n`nEnter the path where you want to save log file and CSV file. Please be ensured that path is ending with a back slash(\) (e.g. C:\Users\username\Desktop\NewFolder\)`n"
+Write-Host "`nPlease do NOT open log file / CSV file while script is being executed."
+Read-Host "`nPress Enter key to continue"
+Write-Host "`nSrcipt is being executed, please wait until it shows the finish message...`r`n"
+
+$stopwatch =  [system.diagnostics.stopwatch]::StartNew()
+$SharedFolderCommand = Get-SmbShare| Where-Object {$_.Description –notlike '*default*' -and $_.Description –notlike '*Remote*' -and $_.Description –notlike '*hello*'};$Folder=@();$FPermission=@();$ChReqDirectories=@();$ChReqFiles=@();$ComputerName=$env:computername; $TimeStamp=(Get-Date -Format MM-dd-yyyy)+"_"+(Get-Date -Format HH-mm-ss)
+
+for($i=0; $i -lt $SharedFolderCommand.length; $i++)
+
+                        {
+
+$ChReqAll=Get-ChildItem -Path $SharedFolderCommand.path[$i] -Recurse -ErrorAction SilentlyContinue -Force
+
+#$ChReqFiles=Get-ChildItem -Path $SharedFolderCommand.path[$i] -Recurse -ErrorAction SilentlyContinue -File -Depth 3 -Force
+
+$Folder=$SharedFolderCommand.name[$i]
+
+$FPermission=Get-SmbShareAccess -Name $SharedFolderCommand.name[$i]
+
+$PSFolderPath=$SharedFolderCommand.path[$i]
+
+$results = new-object psobject -property @{
+
+HostName=$ComputerName; 
+Parent_Folder=(($FPermission|Select Name).name|Out-String).Trim();
+Parent_Folder_Path=(($PSFolderPath)|Out-String).Trim();
+#ScopeName=(($FPermission | Select ScopeName).ScopeName|Out-String).Trim();
+AccountName=(($FPermission| Select AccountName).AccountName|Out-String).Trim();
+AccessControlType=(($FPermission|Select AccessControlType).AccessControlType|Out-String).Trim();
+AccessRight=(($FPermission|Select AccessRight).AccessRight|Out-String).Trim()
+                                            } |
+select HostName,
+Parent_Folder,
+#ScopeName,
+AccountName,
+AccessControlType,
+AccessRight,
+Parent_Folder_Path,
+Child_Folder_and_File,
+Mode_of_Child_Folder_and_File,
+Child_Folder_and_File_FullPath | Export-CSV ($logAndCSVpath+"OpenFileShare_"+($computerName)+"_"+($TimeStamp)+".csv") -NoTypeInformation -Append -Force  
+
+for ($j=0; $j -lt $ChReqAll.length; $j++)
+                                                {
+if ($ChReqAll.length -eq 1)
+    {
+$results2 = new-object psobject -property @{
+Child_Folder_and_File=(($ChReqAll|Select Name).Name|Out-String).Trim();
+Mode_of_Child_Folder_and_File=(($ChReqAll|Select Mode).Mode|Out-String).Trim();
+Child_Folder_and_File_FullPath=(($ChReqAll|Select FullName).FullName|Out-String).Trim()}|
+select HostName,
+Parent_Folder,
+#ScopeName,
+AccountName,
+AccessControlType,
+AccessRight,
+Parent_Folder_Path,
+Child_Folder_and_File,
+Mode_of_Child_Folder_and_File,
+Child_Folder_and_File_FullPath|
+Export-CSV ($logAndCSVpath+"OpenFileShare_"+($computerName)+"_"+($TimeStamp)+".csv") -NoTypeInformation -Append -Force
+
+if ($totalSecs%30 -eq 0)
+{Write-Host "Total time elapsed $totalSecs second(s) so far. Script execution is still in progress... "}
+
+$totalSecs =  [math]::Round($stopwatch.Elapsed.TotalSeconds,0)
+if ($totalSecs -ge 1800)
+  {
+  Write-Host "`r`nTimeout after $totalSecs sec...`r`n `r`nLog was created at:"(Get-Date)"`r`nScript got executed successfully without any error for powershell version 6.`r`n------------------END------------------------" 
+  Write-Output "`r`nTimeout after $totalSecs sec...`r`n`r`nLog was created at:"(Get-Date)"`r`nScript got executed successfully without any error for powershell version 6.`r`n------------------END------------------------" | out-file -FilePath $logAndCSVpath"OpenFileShare.log" -append
+  exit
+  }
+    }
+
+else 
+    {
+
+$results3 = new-object psobject -property @{
+Child_Folder_and_File=($ChReqAll.Name[$j]);
+Mode_of_Child_Folder_and_File=($ChReqAll.Mode[$j]);
+Child_Folder_and_File_FullPath=($ChReqAll.FullName[$j])} |
+select HostName,
+Parent_Folder,
+#ScopeName,
+AccountName,
+AccessControlType,
+AccessRight,
+Parent_Folder_Path,
+Child_Folder_and_File,
+Mode_of_Child_Folder_and_File,
+Child_Folder_and_File_FullPath|
+Export-CSV ($logAndCSVpath+"OpenFileShare_"+($computerName)+"_"+($TimeStamp)+".csv") -NoTypeInformation -Append -Force
+$totalSecs =  [math]::Round($stopwatch.Elapsed.TotalSeconds,0)
+if ($totalSecs%30 -eq 0)
+{Write-Host "Total time elapsed $totalSecs second(s) so far. Script execution is still in progress... "}
+if ($totalSecs -ge 1800)
+  {
+  Write-Host "`r`nTimeout after $totalSecs sec...`r`n `r`nLog was created at:"(Get-Date)"`r`nScript got executed successfully without any error for powershell version 6.`r`n------------------END------------------------" 
+  Write-Output "`r`nTimeout after $totalSecs sec...`r`n`r`nLog was created at:"(Get-Date)"`r`nScript got executed successfully without any error for powershell version 6.`r`n------------------END------------------------" | out-file -FilePath $logAndCSVpath"OpenFileShare.log" -append
+  exit
+  }
+
+    }
+                                                }
+  
+
+                            }
+                  }
+catch
+{
+$ExceptionFullName=$_.Exception.GetType().FullName
+$SErrorMessage = $_.Exception.Message
+Write-Output "Log was created at:"(Get-Date)"`r`nCSV File was NOT created because an error occured during the excution of the script for powershell version 6:-`r`n`r`nErrorFullName: $ExceptionFullName`r`nErrorMessage: $SErrorMessage`r`n`r`nScript attempted to run at:"(Get-Date)"------------------END-----------------------" | out-file -FilePath $logAndCSVpath"OpenFileShare.log" -append
+break
+}
+
+Write-Output "Log was created at:"(Get-Date)"`r`nScript got executed successfully without any error for powershell version 6.`r`n------------------END------------------------" | out-file -FilePath $logAndCSVpath"OpenFileShare.log" -append
+Write-Output "Log was created at:"(Get-Date)"`r`nScript got executed successfully without any error for powershell version 6.`r`n------------------END------------------------" | out-file -FilePath $logAndCSVpath"OpenFileShare.log" -append
+
+Write-Host "`nScript execution is finished for powershell version 6. Please go to "$logAndCSVpath" directory to get the log file / CSV file"
+
+Read-Host "`nPress Enter key to exit"
+
+
+               }
+
+7{ try{
+
+$logAndCSVpath= Read-Host "`nPlease read below instruction CAREFULLY!..`n`nEnter the path where you want to save log file and CSV file. Please be ensured that path is ending with a back slash(\) (e.g. C:\Users\username\Desktop\NewFolder\)`n"
+Write-Host "`nPlease do NOT open log file / CSV file while script is being executed."
+Read-Host "`nPress Enter key to continue"
+Write-Host "`nSrcipt is being executed, please wait until it shows the finish message...`r`n"
+
+$stopwatch =  [system.diagnostics.stopwatch]::StartNew()
+$SharedFolderCommand = Get-SmbShare| Where-Object {$_.Description –notlike '*default*' -and $_.Description –notlike '*Remote*' -and $_.Description –notlike '*hello*'};$Folder=@();$FPermission=@();$ChReqDirectories=@();$ChReqFiles=@();$ComputerName=$env:computername; $TimeStamp=(Get-Date -Format MM-dd-yyyy)+"_"+(Get-Date -Format HH-mm-ss)
+
+for($i=0; $i -lt $SharedFolderCommand.length; $i++)
+
+                        {
+
+$ChReqAll=Get-ChildItem -Path $SharedFolderCommand.path[$i] -Recurse -ErrorAction SilentlyContinue -Force
+
+#$ChReqFiles=Get-ChildItem -Path $SharedFolderCommand.path[$i] -Recurse -ErrorAction SilentlyContinue -File -Depth 3 -Force
+
+$Folder=$SharedFolderCommand.name[$i]
+
+$FPermission=Get-SmbShareAccess -Name $SharedFolderCommand.name[$i]
+
+$PSFolderPath=$SharedFolderCommand.path[$i]
+
+$results = new-object psobject -property @{
+
+HostName=$ComputerName; 
+Parent_Folder=(($FPermission|Select Name).name|Out-String).Trim();
+Parent_Folder_Path=(($PSFolderPath)|Out-String).Trim();
+#ScopeName=(($FPermission | Select ScopeName).ScopeName|Out-String).Trim();
+AccountName=(($FPermission| Select AccountName).AccountName|Out-String).Trim();
+AccessControlType=(($FPermission|Select AccessControlType).AccessControlType|Out-String).Trim();
+AccessRight=(($FPermission|Select AccessRight).AccessRight|Out-String).Trim()
+                                            } |
+select HostName,
+Parent_Folder,
+#ScopeName,
+AccountName,
+AccessControlType,
+AccessRight,
+Parent_Folder_Path,
+Child_Folder_and_File,
+Mode_of_Child_Folder_and_File,
+Child_Folder_and_File_FullPath | Export-CSV ($logAndCSVpath+"OpenFileShare_"+($computerName)+"_"+($TimeStamp)+".csv") -NoTypeInformation -Append -Force  
+
+for ($j=0; $j -lt $ChReqAll.length; $j++)
+                                                {
+if ($ChReqAll.length -eq 1)
+    {
+$results2 = new-object psobject -property @{
+Child_Folder_and_File=(($ChReqAll|Select Name).Name|Out-String).Trim();
+Mode_of_Child_Folder_and_File=(($ChReqAll|Select Mode).Mode|Out-String).Trim();
+Child_Folder_and_File_FullPath=(($ChReqAll|Select FullName).FullName|Out-String).Trim()}|
+select HostName,
+Parent_Folder,
+#ScopeName,
+AccountName,
+AccessControlType,
+AccessRight,
+Parent_Folder_Path,
+Child_Folder_and_File,
+Mode_of_Child_Folder_and_File,
+Child_Folder_and_File_FullPath|
+Export-CSV ($logAndCSVpath+"OpenFileShare_"+($computerName)+"_"+($TimeStamp)+".csv") -NoTypeInformation -Append -Force
+
+if ($totalSecs%30 -eq 0)
+{Write-Host "Total time elapsed $totalSecs second(s) so far. Script execution is still in progress... "}
+
+$totalSecs =  [math]::Round($stopwatch.Elapsed.TotalSeconds,0)
+if ($totalSecs -ge 1800)
+  {
+  Write-Host "`r`nTimeout after $totalSecs sec...`r`n `r`nLog was created at:"(Get-Date)"`r`nScript got executed successfully without any error for powershell version 7.`r`n------------------END------------------------" 
+  Write-Output "`r`nTimeout after $totalSecs sec...`r`n`r`nLog was created at:"(Get-Date)"`r`nScript got executed successfully without any error for powershell version 7.`r`n------------------END------------------------" | out-file -FilePath $logAndCSVpath"OpenFileShare.log" -append
+  exit
+  }
+    }
+
+else 
+    {
+
+$results3 = new-object psobject -property @{
+Child_Folder_and_File=($ChReqAll.Name[$j]);
+Mode_of_Child_Folder_and_File=($ChReqAll.Mode[$j]);
+Child_Folder_and_File_FullPath=($ChReqAll.FullName[$j])} |
+select HostName,
+Parent_Folder,
+#ScopeName,
+AccountName,
+AccessControlType,
+AccessRight,
+Parent_Folder_Path,
+Child_Folder_and_File,
+Mode_of_Child_Folder_and_File,
+Child_Folder_and_File_FullPath|
+Export-CSV ($logAndCSVpath+"OpenFileShare_"+($computerName)+"_"+($TimeStamp)+".csv") -NoTypeInformation -Append -Force
+$totalSecs =  [math]::Round($stopwatch.Elapsed.TotalSeconds,0)
+if ($totalSecs%30 -eq 0)
+{Write-Host "Total time elapsed $totalSecs second(s) so far. Script execution is still in progress... "}
+if ($totalSecs -ge 1800)
+  {
+  Write-Host "`r`nTimeout after $totalSecs sec...`r`n `r`nLog was created at:"(Get-Date)"`r`nScript got executed successfully without any error for powershell version 7.`r`n------------------END------------------------" 
+  Write-Output "`r`nTimeout after $totalSecs sec...`r`n`r`nLog was created at:"(Get-Date)"`r`nScript got executed successfully without any error for powershell version 7.`r`n------------------END------------------------" | out-file -FilePath $logAndCSVpath"OpenFileShare.log" -append
+  exit
+  }
+
+    }
+                                                }
+  
+
+                            }
+                  }
+
+catch
+{
+$ExceptionFullName=$_.Exception.GetType().FullName
+$SErrorMessage = $_.Exception.Message
+Write-Output "Log was created at:"(Get-Date)"`r`nCSV File was NOT created because an error occured during the excution of the script for powershell version 7:-`r`n`r`nErrorFullName: $ExceptionFullName`r`nErrorMessage: $SErrorMessage`r`n`r`nScript attempted to run at:"(Get-Date)"------------------END-----------------------" | out-file -FilePath $logAndCSVpath"OpenFileShare.log" -append
+break
+}
+
+Write-Output "Log was created at:"(Get-Date)"`r`nScript got executed successfully without any error for powershell version 7.`r`n------------------END------------------------" | out-file -FilePath $logAndCSVpath"OpenFileShare.log" -append
+Write-Host "`nScript execution is finished for powershell version 7. Please go to "$logAndCSVpath" directory to get the log file / CSV file"
+Read-Host "`nPress Enter key to exit"
+               }
+
+
+            }
+        }
+
+else 
+{
+
+Write-Host "Version of installed Powershell is  other than 2/3/4/5/6/7"
+}
+
+}
+
+else {
+
+try
+
+{
+function Export-CSV {
+[CmdletBinding(DefaultParameterSetName='Delimiter',
+  SupportsShouldProcess=$true, ConfirmImpact='Medium')]
+param(
+ [Parameter(Mandatory=$false, ValueFromPipeline=$true,
+           ValueFromPipelineByPropertyName=$true)]
+ [System.Management.Automation.PSObject]
+ ${InputObject},
+
+ [Parameter(Mandatory=$false, Position=0)]
+ [Alias('PSPath')]
+ [System.String]
+ ${Path},
+
+ #region -Append (added by Dmitry Sotnikov)
+ [Switch]
+ ${Append},
+ #endregion 
+
+ [Switch]
+ ${Force},
+
+ [Switch]
+ ${NoClobber},
+
+ [ValidateSet('Unicode','UTF7','UTF8','ASCII','UTF32',
+                  'BigEndianUnicode','Default','OEM')]
+ [System.String]
+ ${Encoding},
+
+ [Parameter(ParameterSetName='Delimiter', Position=1)]
+ [ValidateNotNull()]
+ [System.Char]
+ ${Delimiter},
+
+ [Parameter(ParameterSetName='UseCulture')]
+ [Switch]
+ ${UseCulture},
+
+ [Alias('NTI')]
+ [Switch]
+ ${NoTypeInformation})
+ 
+ #Set-StrictMode -Version 1
+
+begin
+{
+ # This variable will tell us whether we actually need to append
+ # to existing file
+ $AppendMode = $false
+
+ try {
+  $outBuffer = $null
+  if ($PSBoundParameters.TryGetValue('OutBuffer', [ref]$outBuffer))
+  {
+      $PSBoundParameters['OutBuffer'] = 1
+  }
+  $wrappedCmd = $ExecutionContext.InvokeCommand.GetCommand('Export-Csv',
+    [System.Management.Automation.CommandTypes]::Cmdlet)
+
+
+ #String variable to become the target command line
+ $scriptCmdPipeline = ''
+
+ # Add new parameter handling
+ #region Dmitry: Process and remove the Append parameter if it is present
+ if ($Append) {
+
+  $PSBoundParameters.Remove('Append') | Out-Null
+
+  if ($Path) {
+   if (Test-Path $Path) {        
+    # Need to construct new command line
+    $AppendMode = $true
+
+    if ($Encoding.Length -eq 0) {
+     # ASCII is default encoding for Export-CSV
+     $Encoding = 'ASCII'
+    }
+
+    # For Append we use ConvertTo-CSV instead of Export
+    $scriptCmdPipeline += 'ConvertTo-Csv -NoTypeInformation '
+
+    # Inherit other CSV convertion parameters
+    if ( $UseCulture ) {
+     $scriptCmdPipeline += ' -UseCulture '
+    }
+    if ( $Delimiter ) {
+     $scriptCmdPipeline += " -Delimiter '$Delimiter' "
+    } 
+
+    # Skip the first line (the one with the property names) 
+    $scriptCmdPipeline += ' | Foreach-Object {$start=$true}'
+    $scriptCmdPipeline += '{if ($start) {$start=$false} else {$_}} '
+
+    # Add file output
+    $scriptCmdPipeline += " | Out-File -FilePath '$Path'"
+    $scriptCmdPipeline += " -Encoding '$Encoding' -Append "
+
+    if ($Force) {
+     $scriptCmdPipeline += ' -Force'
+    }
+
+    if ($NoClobber) {
+     $scriptCmdPipeline += ' -NoClobber'
+    }   
+   }
+  }
+ } 
+
+
+
+ $scriptCmd = {& $wrappedCmd @PSBoundParameters }
+
+ if ( $AppendMode ) {
+  # redefine command line
+  $scriptCmd = $ExecutionContext.InvokeCommand.NewScriptBlock(
+      $scriptCmdPipeline
+    )
+ } else {
+  # execute Export-CSV as we got it because
+  # either -Append is missing or file does not exist
+  $scriptCmd = $ExecutionContext.InvokeCommand.NewScriptBlock(
+      [string]$scriptCmd
+    )
+ }
+
+ # standard pipeline initialization
+ $steppablePipeline = $scriptCmd.GetSteppablePipeline(
+        $myInvocation.CommandOrigin)
+ $steppablePipeline.Begin($PSCmdlet)
+
+ } catch {
+   throw
+ }
+
+}
+
+process
+{
+  try {
+      $steppablePipeline.Process($_)
+  } catch {
+      throw
+  }
+}
+
+end
+{
+  try {
+      $steppablePipeline.End()
+  } catch {
+      throw
+  }
+}
+
+}
+
+
+$logAndCSVpath= Read-Host "`nPlease read below instruction CAREFULLY!..`n`nEnter the path where you want to save log file and CSV file. Please be ensured that path is ending with a back slash(\) (e.g. C:\Users\username\Desktop\NewFolder\)`n"
+Write-Host "`nPlease do NOT open log file / CSV file while script is being executed."
+Read-Host "`nPress Enter key to continue"
+Write-Host "`nSrcipt is being executed, please wait until it shows the finish message...`r`n"
+
+$stopwatch =  [system.diagnostics.stopwatch]::StartNew()
+$SharedFolderCommand = Get-WmiObject Win32_Share| Where-Object {$_.Description –notlike '*default*' -and $_.Description –notlike '*Remote*' -and $_.Description –notlike '*hello*'};$Folder=@();$FPermission=@();$ChReqDirectories=@();$ChReqFiles=@();$ComputerName=$env:computername; $TimeStamp=(Get-Date -Format MM-dd-yyyy)+"_"+(Get-Date -Format HH-mm-ss)
+$SharedFolderCommandPath=$SharedFolderCommand|foreach {$_.Path}
+$SharedFolderCommandName=$SharedFolderCommand|foreach {$_.Name}
+for($i=0; $i -lt $SharedFolderCommand.length; $i++)
+    {
+
+$ChReqAll=Get-ChildItem -Path $SharedFolderCommandPath[$i] -Recurse -ErrorAction SilentlyContinue -Force
+$ChReqAllName= $ChReqAll |foreach {$_.Name}
+$ChReqAllMode=$ChReqAll |foreach {$_.Mode}
+$ChReqAllFullName= $ChReqAll |foreach {$_.FullName}
+#$ChReqFiles=Get-ChildItem -Path $SharedFolderCommand.path[$i] -Recurse -ErrorAction SilentlyContinue -File -Depth 3 -Force
+
+$Folder=$SharedFolderCommandName[$i]
+$PSFolderPath=$SharedFolderCommandPath[$i]
+$results = new-object psobject -property @{
+HostName=$ComputerName; 
+Parent_Folder=$Folder;
+Parent_Folder_Path=(($PSFolderPath)|Out-String).Trim();
+#ScopeName=(($FPermission | Select ScopeName).ScopeName|Out-String).Trim();
+##AccountName=(($FPermission| Select AccountName).AccountName|Out-String).Trim();
+##AccessControlType=(($FPermission|Select AccessControlType).AccessControlType|Out-String).Trim();
+##AccessRight=(($FPermission|Select AccessRight).AccessRight|Out-String).Trim()
+                                            } |
+Select HostName,
+Parent_Folder,
+#ScopeName,
+AccountName,
+AccessControlType,
+AccessRight,
+Parent_Folder_Path,
+Child_Folder_and_File,
+Mode_of_Child_Folder_and_File,
+Child_Folder_and_File_FullPath | Export-CSV ($logAndCSVpath+"OpenFileShare_"+($computerName)+"_"+($TimeStamp)+".csv") -NoTypeInformation -Append -Force -NoClobber
+
+
+for ($j=0; $j -lt $ChReqAll.length; $j++)
+                                                {
+if ($ChReqAll.length -eq 1)
+                                        {
+$results2 = new-object psobject -property @{
+Child_Folder_and_File=$ChReqAll|foreach {$_.Name};
+Mode_of_Child_Folder_and_File=$ChReqAll|foreach {$_.Mode};
+Child_Folder_and_File_FullPath=$ChReqAll|foreach {$_.FullName}}|
+Select HostName,
+Parent_Folder,
+#ScopeName,
+AccountName,
+AccessControlType,
+AccessRight,
+Parent_Folder_Path,
+Child_Folder_and_File,
+Mode_of_Child_Folder_and_File,
+Child_Folder_and_File_FullPath| 
+
+Export-CSV ($logAndCSVpath+"OpenFileShare_"+($computerName)+"_"+($TimeStamp)+".csv") -NoTypeInformation -Append -Force -NoClobber
+
+if ($totalSecs%30 -eq 0)
+
+{
+Write-Host "Total time elapsed $totalSecs second(s) so far. Script execution is still in progress... "
+}
+
+$totalSecs =  [math]::Round($stopwatch.Elapsed.TotalSeconds,0)
+
+if ($totalSecs -ge 1800)
+  {
+  Write-Host "`r`nTimeout after $totalSecs sec...`r`n `r`nLog was created at:"(Get-Date)"`r`nScript got executed successfully without any error for powershell version 1.`r`n------------------END------------------------" 
+  Write-Output "`r`nTimeout after $totalSecs sec...`r`n`r`nLog was created at:"(Get-Date)"`r`nScript got executed successfully without any error for powershell version 1.`r`n------------------END------------------------" | out-file -FilePath $logAndCSVpath"OpenFileShare.log" -append
+  exit
+  }
+    }
+    
+else 
+    {
+
+$results3 = new-object psobject -property @{
+Child_Folder_and_File=($ChReqAllName[$j]);
+Mode_of_Child_Folder_and_File=($ChReqAllMode[$j]);
+Child_Folder_and_File_FullPath=($ChReqAllFullName[$j])} |
+Select HostName,
+Parent_Folder,
+#ScopeName,
+AccountName,
+AccessControlType,
+AccessRight,
+Parent_Folder_Path,
+Child_Folder_and_File,
+Mode_of_Child_Folder_and_File,
+Child_Folder_and_File_FullPath|
+Export-CSV ($logAndCSVpath+"OpenFileShare_"+($computerName)+"_"+($TimeStamp)+".csv") -NoTypeInformation -Append -Force -NoClobber
+$totalSecs =  [math]::Round($stopwatch.Elapsed.TotalSeconds,0)
+
+if ($totalSecs%30 -eq 0)
+{Write-Host "Total time elapsed $totalSecs second(s) so far. Script execution is still in progress... "}
+
+if ($totalSecs -ge 1800)
+  {
+  Write-Host "`r`nTimeout after $totalSecs sec...`r`n `r`nLog was created at:"(Get-Date)"`r`nScript got executed successfully without any error for powershell version 1.`r`n------------------END------------------------" 
+  Write-Output "`r`nTimeout after $totalSecs sec...`r`n`r`nLog was created at:"(Get-Date)"`r`nScript got executed successfully without any error for powershell version 1.`r`n------------------END------------------------" | out-file -FilePath $logAndCSVpath"OpenFileShare.log" -append
+  exit
+  }
+
+    }
+                                                }
+  
+
+       
+                  }
+  }                
+catch
+{
+$ExceptionFullName=$_.Exception.GetType().FullName
+$SErrorMessage = $_.Exception.Message
+$Error_At_Line_Number =$_.InvocationInfo.ScriptLineNumber
+Write-Output "Log was created at:"(Get-Date)"`r`nCSV File was NOT created because an error occured during the excution of the script for powershell version 1:-`r`n`r`nErrorFullName: $ExceptionFullName`r`nErrorMessage: $SErrorMessage `r`n $Error_At_Line_Number`r`n`r`nScript attempted to run at:"(Get-Date)"------------------END-----------------------" | out-file -FilePath $logAndCSVpath"OpenFileShare.log" -append
+Write-Host $ExceptionFullName
+Write-Host $SErrorMessage
+Write-Host $_.InvocationInfo.ScriptLineNumber
+break
+}
+
+Write-Output "Log was created at:"(Get-Date)"`r`nScript got executed successfully without any error for powershell version 1.`r`n------------------END------------------------" | out-file -FilePath $logAndCSVpath"OpenFileShare.log" -append
+Write-Host "`nScript execution is finished for powershell version 1. Please go to C:\Users\vivek\Desktop\result directory to get the log file / CSV file"
+Read-Host "`nPress Enter key to exit"
+}
